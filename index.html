@@ -1,87 +1,120 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Тренажер теста</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="description" content="Тренажёр для запоминания ответов на тест ПБ А.1 и Б9.4">
+<title>Тренажёр теста ПБ А.1 / Б9.4</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="app">
-        <!-- Экран выбора режима -->
-        <div id="mode-selection" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh;">
-            <h2>Выберите режим</h2>
-            <div style="margin: 20px 0; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
-                <button class="mode-btn" data-mode="order">📋 По порядку</button>
-                <button class="mode-btn" data-mode="random">🎲 Случайный</button>
-                <button class="mode-btn" data-mode="weak">🔁 Наиболее забываемые</button>
-            </div>
+<div id="app">
 
-            <!-- Выбор количества вопросов -->
-            <div style="margin: 20px 0;">
-                <label for="question-count" style="font-size: 1rem; margin-right: 10px;">Количество вопросов:</label>
-                <select id="question-count" style="padding: 8px 16px; font-size: 1rem; border-radius: 8px; border: 1px solid #ccc;">
-                    <option value="10">10</option>
-                    <option value="20" selected>20</option>
-                    <option value="30">30</option>
-                    <option value="40">40</option>
-                    <option value="50">50</option>
-                    <option value="60">60</option>
-                    <option value="70">70</option>
-                    <option value="80">80</option>
-                    <option value="90">90</option>
-                    <option value="100">100</option>
-                </select>
-            </div>
-
-            <p id="total-questions-info">Всего вопросов в базе: <span id="total-count">0</span></p>
-
-            <!-- Кнопка статистики -->
-            <div style="margin-top: 20px;">
-                <button id="stats-toggle-btn" style="padding: 10px 24px; background: #8b5cf6; color: white; border: none; border-radius: 10px; font-size: 1rem; cursor: pointer;">📊 Показать статистику</button>
-            </div>
-
-            <!-- Блок статистики (изначально скрыт) -->
-            <div id="stats-container" style="display: none; margin-top: 20px; width: 100%; max-height: 400px; overflow-y: auto; background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #dce2ea;">
-                <h3 style="margin-bottom: 12px;">📊 Статистика ответов (все вопросы)</h3>
-                <div id="stats-content"></div>
-                <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="stats-close-btn" style="padding: 6px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">Закрыть</button>
-                    <button id="reset-stats-btn" style="padding: 6px 16px; background: #e11d48; color: white; border: none; border-radius: 6px; cursor: pointer;">Сбросить статистику</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Основной интерфейс викторины (изначально скрыт) -->
-        <div id="quiz-container" style="display: none;">
-            <header>
-                <h1>📘 Тренажер для подготовки</h1>
-                <div id="progress">Вопрос <span id="current">1</span> из <span id="total">0</span></div>
-            </header>
-            <main>
-                <div id="question-container">
-                    <div id="hint-multiple" style="display: none; color: #6b7280; font-size: 0.9rem; margin-bottom: 8px;">⚠️ Вопрос с множественным выбором (отметьте несколько вариантов). Ответ будет проверен при переходе к следующему вопросу.</div>
-                    <p id="question-text"></p>
-                    <div id="options-container"></div>
-
-                    <div id="source-link-container">
-                        <a id="source-link" href="#" target="_blank" style="display:none;">📎 Открыть источник</a>
-                    </div>
-
-                    <div id="feedback" style="display:none;">
-                        <p id="explanation"></p>
-                    </div>
-                </div>
-                <nav>
-                    <button id="prev-btn">◀ Предыдущий</button>
-                    <button id="next-btn">Следующий ▶</button>
-                </nav>
-                <div style="margin-top: 15px; text-align: center;">
-                    <button id="change-mode-btn" style="background: #6b7280; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem;">🔄 Выбор режима</button>
-                </div>
-            </main>
-        </div>
+  <!-- Верхняя панель: тема + статус синхронизации -->
+  <div id="top-bar">
+    <button id="theme-toggle-btn" class="icon-btn" title="Переключить тему" aria-label="Переключить тему">🌓</button>
+    <div id="sync-status" class="sync-status" data-state="offline">
+      <span id="sync-status-dot" class="sync-dot" aria-hidden="true"></span>
+      <span id="sync-status-text">Локально (это устройство)</span>
     </div>
-    <script src="script.js"></script>
+    <button id="sync-btn" class="link-btn">🔗 Синхронизировать между устройствами</button>
+  </div>
+
+  <!-- Экран выбора режима -->
+  <div id="mode-selection" class="screen">
+    <h1>📘 Тренажёр теста ПБ А.1 / Б9.4</h1>
+
+    <div id="filters-block" class="card">
+      <h2>Разделы</h2>
+      <p class="hint">Оставьте все отмеченными, чтобы тренироваться по всей базе</p>
+      <div id="category-filters" class="chip-group" role="group" aria-label="Фильтр по нормативным документам"></div>
+    </div>
+
+    <div class="card">
+      <h2>Режим</h2>
+      <div id="mode-buttons" class="mode-group" role="group" aria-label="Выбор режима тренировки">
+        <button class="mode-btn" data-mode="order">📋 По порядку</button>
+        <button class="mode-btn" data-mode="random">🎲 Случайный</button>
+        <button class="mode-btn" data-mode="weak">🔁 Наиболее забываемые</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="question-count">Количество вопросов</label>
+      <select id="question-count">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+        <option value="all">Все выбранные</option>
+      </select>
+      <p id="total-questions-info">Доступно вопросов: <span id="total-count">0</span></p>
+    </div>
+
+    <div class="card">
+      <button id="stats-toggle-btn" class="secondary-btn">📊 Статистика ответов</button>
+      <div id="stats-container" class="stats-container" hidden>
+        <h3>Статистика по всем вопросам</h3>
+        <div id="stats-content"></div>
+        <div class="btn-row">
+          <button id="stats-close-btn" class="secondary-btn">Закрыть</button>
+          <button id="reset-stats-btn" class="danger-btn">Сбросить статистику</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Основной интерфейс викторины -->
+  <div id="quiz-container" class="screen" hidden>
+    <header>
+      <div id="progress-bar-track"><div id="progress-bar-fill"></div></div>
+      <div id="progress-text">Вопрос <span id="current">1</span> из <span id="total">0</span></div>
+    </header>
+
+    <main>
+      <div id="question-container">
+        <span id="question-category" class="badge"></span>
+        <div id="hint-multiple" class="hint" hidden>⚠️ Вопрос с несколькими правильными ответами — отметьте все подходящие варианты.</div>
+        <p id="question-text"></p>
+
+        <form id="options-form">
+          <div id="options-container" role="group"></div>
+        </form>
+
+        <div id="source-link-container">
+          <a id="source-link" href="#" target="_blank" rel="noopener" hidden>📎 Открыть источник вопроса</a>
+        </div>
+
+        <div id="feedback" hidden>
+          <p id="feedback-result"></p>
+          <p id="explanation"></p>
+        </div>
+      </div>
+    </main>
+
+    <nav id="quiz-nav">
+      <button id="prev-btn">◀ Предыдущий</button>
+      <button id="check-btn" class="primary-btn">Проверить</button>
+      <button id="next-btn">Следующий ▶</button>
+    </nav>
+
+    <div class="btn-row centered">
+      <button id="flag-btn" class="secondary-btn">🚩 Отметить для повтора</button>
+      <button id="change-mode-btn" class="secondary-btn">🔄 Выбор режима</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
 </body>
 </html>

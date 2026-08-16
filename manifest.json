@@ -1,0 +1,16 @@
+{
+  "name": "Тренажёр теста ПБ А.1 / Б9.4",
+  "short_name": "ПБ Тренажёр",
+  "description": "Тренажёр для запоминания ответов на тест промышленной безопасности",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
