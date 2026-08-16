@@ -78,6 +78,9 @@ body {
   gap: 6px;
   font-size: 0.82rem;
   color: var(--text-muted);
+  min-width: 0;      /* даёт тексту право сжиматься внутри flex-контейнера */
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .sync-dot {
@@ -86,9 +89,16 @@ body {
   border-radius: 50%;
   background: var(--text-muted);
   display: inline-block;
+  flex-shrink: 0;
 }
 .sync-status[data-state="online"] .sync-dot { background: var(--success); }
 .sync-status[data-state="syncing"] .sync-dot { background: #f59e0b; }
+
+#sync-status-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .link-btn {
   margin-left: auto;
@@ -98,6 +108,8 @@ body {
   cursor: pointer;
   font-size: 0.85rem;
   padding: 6px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .link-btn:hover { text-decoration: underline; }
 
@@ -211,23 +223,84 @@ button { font-family: inherit; }
 /* ---------- Статистика ---------- */
 .stats-container {
   margin-top: 14px;
-  max-height: 400px;
-  overflow-y: auto;
   border-top: 1px solid var(--border);
   padding-top: 12px;
+}
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  padding-bottom: 8px;
+  z-index: 1;
+}
+.stats-header h3 { margin: 0; }
+
+.btn-row.no-margin { margin-top: 0; }
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.stat-metric {
+  background: var(--chip-bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.stat-metric .value { font-size: 1.3rem; font-weight: 700; color: var(--primary); line-height: 1.2; }
+.stat-metric .label { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+
+.stats-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.stats-controls label { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.stats-controls select { width: auto; margin-top: 0; flex: 1; min-width: 180px; }
+
+#stats-content {
+  max-height: 340px;
+  overflow-y: auto;
 }
 
 .stat-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
 }
 
-.stat-squares { display: flex; gap: 3px; }
+.stat-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-score {
+  flex-shrink: 0;
+  width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.stat-squares { display: flex; gap: 3px; flex-shrink: 0; }
 .stat-square {
   width: 10px;
   height: 10px;
@@ -236,6 +309,22 @@ button { font-family: inherit; }
 }
 .stat-square.correct { background: var(--success); }
 .stat-square.wrong { background: var(--danger); }
+
+/* Полоса общего прогресса под карточками-метриками */
+.stats-progress-track {
+  height: 8px;
+  background: var(--chip-bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 2px 0 14px;
+}
+.stats-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+  border-radius: 999px;
+  transition: width 0.3s;
+}
 
 /* ---------- Вопрос ---------- */
 header { margin-bottom: 12px; }
@@ -332,4 +421,28 @@ header { margin-bottom: 12px; }
   .mode-btn { flex: 1 1 100%; }
   #quiz-nav { flex-wrap: wrap; }
   #quiz-nav button { flex: 1 1 45%; }
+
+  /* Верхняя панель на телефоне: тема + статус в одну строку,
+     кнопка синхронизации — отдельной строкой на всю ширину,
+     чтобы текст статуса и текст кнопки не наезжали друг на друга. */
+  #top-bar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "theme status"
+      "sync  sync";
+    align-items: center;
+    gap: 8px 10px;
+  }
+  #theme-toggle-btn { grid-area: theme; }
+  .sync-status { grid-area: status; justify-self: end; text-align: right; }
+  .link-btn {
+    grid-area: sync;
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+    background: var(--chip-bg);
+    border-radius: 8px;
+    padding: 9px 8px;
+  }
 }

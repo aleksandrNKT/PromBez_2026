@@ -59,12 +59,29 @@
     <div class="card">
       <button id="stats-toggle-btn" class="secondary-btn">📊 Статистика ответов</button>
       <div id="stats-container" class="stats-container" hidden>
-        <h3>Статистика по всем вопросам</h3>
-        <div id="stats-content"></div>
-        <div class="btn-row">
-          <button id="stats-close-btn" class="secondary-btn">Закрыть</button>
-          <button id="reset-stats-btn" class="danger-btn">Сбросить статистику</button>
+
+        <div class="stats-header">
+          <h3>Статистика по всем вопросам</h3>
+          <div class="btn-row no-margin">
+            <button id="stats-close-btn" class="secondary-btn">Закрыть</button>
+            <button id="reset-stats-btn" class="danger-btn">Сбросить статистику</button>
+          </div>
         </div>
+
+        <div id="stats-summary" class="stats-summary"></div>
+
+        <div class="stats-controls">
+          <label for="stats-sort">Сортировка</label>
+          <select id="stats-sort">
+            <option value="weak_desc">Сначала самые сложные</option>
+            <option value="weak_asc">Сначала самые лёгкие</option>
+            <option value="unanswered">Сначала неотвеченные</option>
+            <option value="number">По номеру вопроса</option>
+            <option value="recent">Давно не повторяли</option>
+          </select>
+        </div>
+
+        <div id="stats-content"></div>
       </div>
     </div>
   </div>
