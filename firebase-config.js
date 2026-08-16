@@ -27,10 +27,11 @@
 // в localStorage этого браузера), кнопка синхронизации не появится.
 
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyDSr2q1QJxQrl2EAMrjl_hUf03tCdBDIhQ",
+  authDomain: "prombez2026-8109c.firebaseapp.com",
+  projectId: "prombez2026-8109c",
+  storageBucket: "prombez2026-8109c.firebasestorage.app",
+  messagingSenderId: "569579483615",
+  appId: "1:569579483615:web:8f93d6dda090fb9b8c146a",
+  measurementId: "G-CNSMBYXT9P"
 };
