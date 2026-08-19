@@ -747,7 +747,7 @@ async function onSyncBtnClick() {
    ========================================================================= */
 
 function bindEvents() {
-  $all('.mode-btn').forEach(btn => {
+  $all('#mode-buttons .mode-btn').forEach(btn => {
     btn.addEventListener('click', () => startSession(btn.dataset.mode));
   });
 
