@@ -272,6 +272,11 @@ function getFilteredQuestions() {
 
 function updateTotalCount() {
   $('#total-count').textContent = getFilteredQuestions().length;
+  // Если панель статистики открыта, а набор вопросов мог измениться (смена области
+  // аттестации или фильтра по разделам) — перерисовываем её, чтобы не показывать
+  // устаревшие данные от другой области/фильтра.
+  const statsBox = $('#stats-container');
+  if (statsBox && !statsBox.hidden) renderStats();
 }
 
 /* =========================================================================
