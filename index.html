@@ -24,9 +24,19 @@
     <button id="sync-btn" class="link-btn">🔗 Синхронизировать между устройствами</button>
   </div>
 
+  <!-- Экран выбора области аттестации -->
+  <div id="area-selection" class="screen">
+    <h1>📘 Тренажёр по промышленной безопасности</h1>
+    <p class="hint centered">Выберите область аттестации, по которой хотите тренироваться</p>
+    <div id="area-buttons" class="mode-group" role="group" aria-label="Выбор области аттестации"></div>
+  </div>
+
   <!-- Экран выбора режима -->
-  <div id="mode-selection" class="screen">
-    <h1>📘 Тренажёр теста ПБ А.1 / Б9.4</h1>
+  <div id="mode-selection" class="screen" hidden>
+    <div id="mode-screen-header">
+      <button id="change-area-btn" class="secondary-btn">◀ Другая область</button>
+      <span id="current-area-badge" class="badge"></span>
+    </div>
 
     <div id="filters-block" class="card">
       <h2>Разделы</h2>
@@ -61,7 +71,7 @@
       <div id="stats-container" class="stats-container" hidden>
 
         <div class="stats-header">
-          <h3>Статистика по всем вопросам</h3>
+          <h3 id="stats-title">Статистика</h3>
           <div class="btn-row no-margin">
             <button id="stats-close-btn" class="secondary-btn">Закрыть</button>
             <button id="reset-stats-btn" class="danger-btn">Сбросить статистику</button>

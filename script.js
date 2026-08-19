@@ -9,9 +9,10 @@ const LS_KEYS = {
   theme: 'pb_theme',
   session: 'pb_session_v2',
   flags: 'pb_flags_v1',
-  filters: 'pb_filters_v1',
+  filters: 'pb_filters_v1',       // теперь хранит объект { [examArea]: [category,...] }
   cloudUid: 'pb_cloud_uid',
   statsSort: 'pb_stats_sort_v1',
+  examArea: 'pb_exam_area_v1',
 };
 
 // Параметры формулы веса для режима «Наиболее забываемые»
@@ -19,11 +20,14 @@ const SCORE_ALPHA = 3;     // «наказание» за высокий score
 const SCORE_BETA = 0.05;   // минимальный вес — чтобы даже выученные карточки изредка повторялись
 const FLAG_WEIGHT_BOOST = 1.5; // дополнительный множитель веса для карточек, отмеченных флажком
 
-let ALL_QUESTIONS = [];      // всё из data.json
-let CATEGORIES = [];         // уникальные категории
-let stats = migrateAllStats(loadJSON(LS_KEYS.stats, {})); // { [id]: { total, correct, last5:[1,0,...], last } }
+let ALL_QUESTIONS = [];      // всё из data.json (все области аттестации сразу)
+let EXAM_AREAS = [];         // уникальные области аттестации, напр. ["Б.9.4", "А.1"]
+let CATEGORIES = [];         // уникальные категории ВНУТРИ текущей выбранной области
+let stats = migrateAllStats(loadJSON(LS_KEYS.stats, {})); // { [id]: { total, correct, last5:[1,0,...], last } } — id глобально уникален, поэтому статистика областей не пересекается
 let flags = new Set(loadJSON(LS_KEYS.flags, []));
-let selectedCategories = new Set(loadJSON(LS_KEYS.filters, null));
+let filtersByArea = loadJSON(LS_KEYS.filters, {});     // { [examArea]: [category, ...] }
+let selectedCategories = new Set();                    // фильтр категорий для ТЕКУЩЕЙ области
+let selectedExamArea = loadJSON(LS_KEYS.examArea, null);
 let session = loadJSON(LS_KEYS.session, null);
 
 /* Firebase / облачная синхронизация */
@@ -78,8 +82,24 @@ async function loadQuestions() {
   const res = await fetch('data.json');
   if (!res.ok) throw new Error('Не удалось загрузить data.json');
   ALL_QUESTIONS = await res.json();
-  CATEGORIES = [...new Set(ALL_QUESTIONS.map(q => q.category).filter(Boolean))];
-  if (!selectedCategories.size) {
+  // Порядок областей — по первому появлению в файле (обычно соответствует порядку конвертации)
+  EXAM_AREAS = [...new Set(ALL_QUESTIONS.map(q => q.examArea).filter(Boolean))];
+}
+
+/** Вопросы только выбранной области аттестации (без учёта фильтра по категориям). */
+function getAreaQuestions() {
+  return ALL_QUESTIONS.filter(q => q.examArea === selectedExamArea);
+}
+
+/** Пересчитывает список категорий (нормативных документов) для текущей области
+ *  и восстанавливает/инициализирует фильтр выбранных категорий для неё. */
+function refreshCategoriesForCurrentArea() {
+  CATEGORIES = [...new Set(getAreaQuestions().map(q => q.category).filter(Boolean))];
+  const saved = filtersByArea[selectedExamArea];
+  if (saved && saved.length) {
+    selectedCategories = new Set(saved.filter(c => CATEGORIES.includes(c)));
+    if (!selectedCategories.size) selectedCategories = new Set(CATEGORIES);
+  } else {
     selectedCategories = new Set(CATEGORIES);
   }
 }
@@ -237,7 +257,8 @@ function renderCategoryFilters() {
       } else {
         selectedCategories.add(cat);
       }
-      saveJSON(LS_KEYS.filters, [...selectedCategories]);
+      filtersByArea[selectedExamArea] = [...selectedCategories];
+      saveJSON(LS_KEYS.filters, filtersByArea);
       btn.setAttribute('aria-pressed', selectedCategories.has(cat) ? 'true' : 'false');
       updateTotalCount();
     });
@@ -246,7 +267,7 @@ function renderCategoryFilters() {
 }
 
 function getFilteredQuestions() {
-  return ALL_QUESTIONS.filter(q => !q.category || selectedCategories.has(q.category));
+  return getAreaQuestions().filter(q => !q.category || selectedCategories.has(q.category));
 }
 
 function updateTotalCount() {
@@ -261,7 +282,7 @@ function pickQuestionIds(mode, count) {
   const pool = getFilteredQuestions();
   let ordered;
   if (mode === 'order') {
-    ordered = pool.slice().sort((a, b) => a.id - b.id);
+    ordered = pool.slice().sort((a, b) => a.num - b.num);
   } else if (mode === 'random') {
     ordered = shuffle(pool);
   } else { // weak — вероятностная выборка с приоритетом карточек с низким score
@@ -285,6 +306,7 @@ function startSession(mode) {
   });
   session = {
     mode,
+    examArea: selectedExamArea,
     questionIds: ids,
     optionOrders,
     index: 0,
@@ -314,7 +336,7 @@ function renderQuestion() {
   $('#total').textContent = session.questionIds.length;
   $('#progress-bar-fill').style.width = `${((session.index + 1) / session.questionIds.length) * 100}%`;
 
-  $('#question-category').textContent = q.category || '';
+  $('#question-category').textContent = q.category ? `${q.category} · №${q.num}` : `№${q.num}`;
   $('#question-text').textContent = q.question;
   $('#hint-multiple').hidden = q.type !== 'multiple';
 
@@ -447,7 +469,7 @@ function getSortedStatRows(sortMode) {
       });
       break;
     case 'number':
-      rows.sort((a, b) => a.q.id - b.q.id);
+      rows.sort((a, b) => a.q.num - b.q.num);
       break;
     case 'recent':
       rows.sort((a, b) => (a.rec?.last || 0) - (b.rec?.last || 0)); // давно/никогда — вперёд
@@ -460,6 +482,7 @@ function getSortedStatRows(sortMode) {
 }
 
 function renderStatsSummary() {
+  $('#stats-title').textContent = `Статистика · ${selectedExamArea || ''}`;
   const pool = getFilteredQuestions();
   const s = computeSummary(pool);
   const box = $('#stats-summary');
@@ -512,7 +535,7 @@ function renderStats() {
     const label = document.createElement('span');
     label.className = 'stat-row-label';
     const flagMark = flags.has(q.id) ? '🚩 ' : '';
-    label.textContent = `${flagMark}№${q.id}. ${q.question.slice(0, 60)}${q.question.length > 60 ? '…' : ''}`;
+    label.textContent = `${flagMark}№${q.num}. ${q.question.slice(0, 60)}${q.question.length > 60 ? '…' : ''}`;
 
     const scoreEl = document.createElement('span');
     scoreEl.className = 'stat-score';
@@ -539,15 +562,47 @@ function renderStats() {
    ЭКРАНЫ
    ========================================================================= */
 
+function showAreaScreen() {
+  $('#quiz-container').hidden = true;
+  $('#mode-selection').hidden = true;
+  $('#area-selection').hidden = false;
+}
+
 function showModeScreen() {
+  $('#area-selection').hidden = true;
   $('#quiz-container').hidden = true;
   $('#mode-selection').hidden = false;
+  $('#current-area-badge').textContent = selectedExamArea || '';
   updateTotalCount();
 }
 
 function showQuizScreen() {
+  $('#area-selection').hidden = true;
   $('#mode-selection').hidden = true;
   $('#quiz-container').hidden = false;
+}
+
+/** Рендер кнопок выбора области аттестации на первом экране. */
+function renderAreaButtons() {
+  const box = $('#area-buttons');
+  box.innerHTML = '';
+  EXAM_AREAS.forEach(area => {
+    const count = ALL_QUESTIONS.filter(q => q.examArea === area).length;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mode-btn area-btn';
+    btn.innerHTML = `<span class="area-btn-title">${area}</span><span class="area-btn-count">${count} вопросов</span>`;
+    btn.addEventListener('click', () => selectArea(area));
+    box.appendChild(btn);
+  });
+}
+
+function selectArea(area) {
+  selectedExamArea = area;
+  saveJSON(LS_KEYS.examArea, area);
+  refreshCategoriesForCurrentArea();
+  renderCategoryFilters();
+  showModeScreen();
 }
 
 /* =========================================================================
@@ -701,6 +756,7 @@ function bindEvents() {
   $('#prev-btn').addEventListener('click', goPrev);
   $('#flag-btn').addEventListener('click', toggleFlag);
   $('#change-mode-btn').addEventListener('click', showModeScreen);
+  $('#change-area-btn').addEventListener('click', showAreaScreen);
 
   $('#stats-toggle-btn').addEventListener('click', () => {
     const box = $('#stats-container');
@@ -736,22 +792,35 @@ async function init() {
   applyTheme(loadJSON(LS_KEYS.theme, matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
   await loadQuestions();
-  renderCategoryFilters();
-  updateTotalCount();
+  renderAreaButtons();
   $('#stats-sort').value = loadJSON(LS_KEYS.statsSort, 'weak_desc');
   bindEvents();
   initCloud();
 
-  // Восстановление сессии, прерванной перезагрузкой страницы
-  if (session && session.questionIds && session.questionIds.length) {
+  // Восстановление сессии, прерванной перезагрузкой страницы (включая область аттестации)
+  if (session && session.questionIds && session.questionIds.length && session.examArea) {
     const stillValid = session.questionIds.every(id => ALL_QUESTIONS.some(q => q.id === id));
-    if (stillValid) {
+    if (stillValid && EXAM_AREAS.includes(session.examArea)) {
+      selectedExamArea = session.examArea;
+      saveJSON(LS_KEYS.examArea, selectedExamArea);
+      refreshCategoriesForCurrentArea();
+      renderCategoryFilters();
       showQuizScreen();
       renderQuestion();
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
       return;
     }
   }
-  showModeScreen();
+
+  // Если область уже выбиралась раньше — сразу открываем экран режима для неё,
+  // иначе — экран выбора области (первый запуск).
+  if (selectedExamArea && EXAM_AREAS.includes(selectedExamArea)) {
+    refreshCategoriesForCurrentArea();
+    renderCategoryFilters();
+    showModeScreen();
+  } else {
+    showAreaScreen();
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -19,15 +19,23 @@ def validate(path='data.json'):
         errors.append('Файл должен содержать непустой список вопросов.')
         return errors
 
+    areas_count = {}
+
     for q in data:
         qid = q.get('id', '???')
 
-        if 'id' not in q or not isinstance(q['id'], int):
-            errors.append(f'Вопрос {qid}: отсутствует или некорректен id.')
+        if 'id' not in q or not isinstance(q['id'], str) or not q['id']:
+            errors.append(f'Вопрос {qid}: отсутствует или некорректен id (должен быть непустой строкой).')
         elif q['id'] in ids_seen:
             errors.append(f'Вопрос {qid}: дублирующийся id.')
         else:
             ids_seen.add(q['id'])
+
+        area = q.get('examArea')
+        if not area or not isinstance(area, str):
+            errors.append(f'Вопрос {qid}: отсутствует или некорректно поле examArea.')
+        else:
+            areas_count[area] = areas_count.get(area, 0) + 1
 
         if q.get('type') not in ('single', 'multiple'):
             errors.append(f'Вопрос {qid}: некорректный type "{q.get("type")}".')
@@ -52,6 +60,10 @@ def validate(path='data.json'):
 
         if not q.get('question', '').strip():
             errors.append(f'Вопрос {qid}: пустой текст вопроса.')
+
+    if not errors:
+        summary = ', '.join(f'{a}: {n}' for a, n in areas_count.items())
+        print(f'ℹ️  Области аттестации в файле: {summary}')
 
     return errors
 

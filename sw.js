@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pb-trainer-v1';
+const CACHE_NAME = 'pb-trainer-v2';
 const CORE_ASSETS = [
   './',
   './index.html',

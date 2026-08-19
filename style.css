@@ -167,6 +167,31 @@ h1 { text-align: center; font-size: 1.4rem; margin: 8px 0; }
   border-color: var(--primary);
 }
 
+/* ---------- Экран выбора области аттестации ---------- */
+.hint.centered { text-align: center; }
+
+.area-btn {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px;
+}
+.area-btn-title { font-size: 1.1rem; font-weight: 700; }
+.area-btn-count { font-size: 0.8rem; color: var(--text-muted); }
+.area-btn[aria-pressed="true"] .area-btn-count { color: rgba(255,255,255,0.8); }
+
+/* ---------- Шапка экрана выбора режима (кнопка "другая область") ---------- */
+#mode-screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+#mode-screen-header .badge { margin: 0; }
+
 select, input[type="number"] {
   padding: 8px 12px;
   font-size: 1rem;
