@@ -13,18 +13,27 @@ const LS_KEYS = {
   cloudUid: 'pb_cloud_uid',
   statsSort: 'pb_stats_sort_v1',
   examArea: 'pb_exam_area_v1',
+  mastered: 'pb_mastered_v1',     // id вопросов, принудительно отмеченных как «Выучено»
 };
 
 // Параметры формулы веса для режима «Наиболее забываемые»
 const SCORE_ALPHA = 3;     // «наказание» за высокий score
 const SCORE_BETA = 0.05;   // минимальный вес — чтобы даже выученные карточки изредка повторялись
 const FLAG_WEIGHT_BOOST = 1.5; // дополнительный множитель веса для карточек, отмеченных флажком
+// Порог score для счётчика «Полностью выучено» в сводке статистики. Не 1.0:
+// score = 1.0 ровно требует total>=8 и АБСОЛЮТНО безошибочной истории вопроса
+// за всё время — на практике почти недостижимо (хватит одной давней ошибки
+// среди множества верных ответов). Порог 0.85 достигается при нескольких
+// подряд верных ответах даже с одной-двумя ошибками в далёком прошлом —
+// это и имеется в виду под «выучено» в обиходном смысле.
+const MASTERY_THRESHOLD = 0.85;
 
 let ALL_QUESTIONS = [];      // всё из data.json (все области аттестации сразу)
 let EXAM_AREAS = [];         // уникальные области аттестации, напр. ["Б.9.4", "А.1"]
 let CATEGORIES = [];         // уникальные категории ВНУТРИ текущей выбранной области
 let stats = migrateAllStats(loadJSON(LS_KEYS.stats, {})); // { [id]: { total, correct, last5:[1,0,...], last } } — id глобально уникален, поэтому статистика областей не пересекается
 let flags = new Set(loadJSON(LS_KEYS.flags, []));
+let forcedMastered = new Set(loadJSON(LS_KEYS.mastered, [])); // вопросы, принудительно отмеченные «Выучено»
 let filtersByArea = loadJSON(LS_KEYS.filters, {});     // { [examArea]: [category, ...] }
 let selectedCategories = new Set();                    // фильтр категорий для ТЕКУЩЕЙ области
 let selectedExamArea = loadJSON(LS_KEYS.examArea, null);
@@ -152,6 +161,12 @@ function recordAnswer(qid, isCorrect) {
   rec.last = Date.now();
   stats[key] = rec;
   saveJSON(LS_KEYS.stats, stats);
+  // Неверный ответ по вопросу, ранее отмеченному вручную как «Выучено», —
+  // явный сигнал, что статус больше не соответствует действительности.
+  if (!isCorrect && forcedMastered.has(qid)) {
+    forcedMastered.delete(qid);
+    saveJSON(LS_KEYS.mastered, [...forcedMastered]);
+  }
   scheduleCloudWrite();
 }
 
@@ -184,6 +199,16 @@ function computeScore(rec) {
 }
 
 /**
+ * Итоговый score с учётом принудительного статуса «Выучено»: если вопрос
+ * отмечен вручную, он считается полностью выученным (1) независимо от
+ * реальной истории ответов — это и используется для % в статистике.
+ */
+function getEffectiveScore(qid) {
+  if (forcedMastered.has(qid)) return 1;
+  return computeScore(getRec(qid));
+}
+
+/**
  * Score с поправкой на давность последнего ответа (кривая забывания) —
  * используется только для приоритизации в режиме «Наиболее забываемые»,
  * а не для показа % в статистике. Чем выше «сырой» score, тем дольше
@@ -204,8 +229,13 @@ function computeDecayedScore(rec) {
 /**
  * Вес карточки для вероятностной выборки в режиме «Наиболее забываемые».
  * weight = exp(-alpha * decayedScore) + beta, затем множитель для флажков.
+ * Принудительно отмеченные «Выучено» вопросы не проходят через decay —
+ * они постоянно держатся у минимального веса (BETA), чтобы не отвлекать
+ * повторными показами хорошо знакомого материала, пока статус не снят
+ * вручную или не сброшен неверным ответом (см. recordAnswer).
  */
 function computeWeight(qid) {
+  if (forcedMastered.has(qid)) return SCORE_BETA;
   const score = computeDecayedScore(getRec(qid));
   let w = Math.exp(-SCORE_ALPHA * score) + SCORE_BETA;
   if (flags.has(qid)) w *= FLAG_WEIGHT_BOOST;
@@ -229,8 +259,10 @@ function weightedOrder(items, weightFn) {
 function resetAllStats() {
   stats = {};
   flags = new Set();
+  forcedMastered = new Set();
   saveJSON(LS_KEYS.stats, stats);
   saveJSON(LS_KEYS.flags, []);
+  saveJSON(LS_KEYS.mastered, []);
   scheduleCloudWrite();
   renderStats();
 }
@@ -244,9 +276,9 @@ function computeSummary(pool) {
   pool.forEach(q => {
     const rec = getRec(q.id);
     if (flags.has(q.id)) flaggedCount++;
-    const score = computeScore(rec);
+    const score = getEffectiveScore(q.id);
     scoreSum += score;
-    if (score === 1) mastered++;
+    if (score >= MASTERY_THRESHOLD) mastered++;
     if (rec && rec.total > 0) {
       answered++;
       totalAttempts += rec.total;
@@ -455,6 +487,8 @@ function renderQuestion() {
   updateActionButton();
 
   $('#flag-btn').textContent = flags.has(q.id) ? '🚩 Убрать из повтора' : '🚩 Отметить для повтора';
+  $('#master-btn').textContent = forcedMastered.has(q.id) ? '✅ Убрать статус «Выучено»' : '✅ Отметить как выученное';
+  $('#master-btn').classList.toggle('is-active', forcedMastered.has(q.id));
 
   saveJSON(LS_KEYS.session, session);
 }
@@ -552,13 +586,29 @@ function toggleFlag() {
   renderQuestion();
 }
 
+/**
+ * Принудительная отметка «Выучено» — позволяет вручную зафиксировать, что
+ * вопрос хорошо знаком, и не получать его в режиме «Наиболее забываемые»
+ * (даже если реальная история ответов ещё не набрала высокий score).
+ * Сбрасывается автоматически при неверном ответе (см. recordAnswer) или
+ * вручную повторным нажатием этой же кнопки.
+ */
+function toggleMastered() {
+  const q = currentQuestion();
+  if (forcedMastered.has(q.id)) forcedMastered.delete(q.id);
+  else forcedMastered.add(q.id);
+  saveJSON(LS_KEYS.mastered, [...forcedMastered]);
+  scheduleCloudWrite();
+  renderQuestion();
+}
+
 /* =========================================================================
    СТАТИСТИКА (экран)
    ========================================================================= */
 
 function getSortedStatRows(sortMode) {
   const pool = getFilteredQuestions();
-  const rows = pool.map(q => ({ q, rec: getRec(q.id), score: computeScore(getRec(q.id)) }));
+  const rows = pool.map(q => ({ q, rec: getRec(q.id), score: getEffectiveScore(q.id) }));
   switch (sortMode) {
     case 'weak_asc': // сначала самые лёгкие (высокий score)
       rows.sort((a, b) => b.score - a.score);
@@ -648,7 +698,8 @@ function renderStats() {
     const label = document.createElement('span');
     label.className = 'stat-row-label';
     const flagMark = flags.has(q.id) ? '🚩 ' : '';
-    label.textContent = `${flagMark}№${q.num}. ${q.question.slice(0, 60)}${q.question.length > 60 ? '…' : ''}`;
+    const masterMark = forcedMastered.has(q.id) ? '✅ ' : '';
+    label.textContent = `${flagMark}${masterMark}№${q.num}. ${q.question.slice(0, 60)}${q.question.length > 60 ? '…' : ''}`;
 
     const scoreEl = document.createElement('span');
     scoreEl.className = 'stat-score';
@@ -786,6 +837,7 @@ async function attachCloudListener() {
   await ref.set({
     stats,
     flags: [...flags],
+    mastered: [...forcedMastered],
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -819,6 +871,10 @@ function mergeRemoteIntoLocal(remote, overwrite = false) {
     flags = overwrite ? new Set(remote.flags) : new Set([...flags, ...remote.flags]);
     saveJSON(LS_KEYS.flags, [...flags]);
   }
+  if (remote.mastered) {
+    forcedMastered = overwrite ? new Set(remote.mastered) : new Set([...forcedMastered, ...remote.mastered]);
+    saveJSON(LS_KEYS.mastered, [...forcedMastered]);
+  }
 }
 
 function scheduleCloudWrite() {
@@ -829,6 +885,7 @@ function scheduleCloudWrite() {
       await cloud.db.collection('users').doc(cloud.uid).set({
         stats,
         flags: [...flags],
+        mastered: [...forcedMastered],
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } catch (e) {
@@ -867,6 +924,7 @@ function bindEvents() {
   $('#action-btn').addEventListener('click', onActionBtnClick);
   $('#prev-btn').addEventListener('click', goPrev);
   $('#flag-btn').addEventListener('click', toggleFlag);
+  $('#master-btn').addEventListener('click', toggleMastered);
   $('#change-mode-btn').addEventListener('click', showModeScreen);
   $('#change-area-btn').addEventListener('click', showAreaScreen);
 

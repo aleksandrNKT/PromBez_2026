@@ -242,6 +242,10 @@ button { font-family: inherit; }
   font-size: 0.85rem;
 }
 
+.secondary-btn.is-active {
+  background: var(--success);
+}
+
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .btn-row.centered { justify-content: center; }
 
