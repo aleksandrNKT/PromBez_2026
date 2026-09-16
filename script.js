@@ -156,30 +156,57 @@ function recordAnswer(qid, isCorrect) {
 }
 
 /**
- * Показатель выученности карточки, диапазон [0, 1].
- * Точная формула:
- *  - если total>=5 и последние 5 ответов верные -> score = 1 (выучено окончательно)
- *  - иначе score = 0.7*recent + 0.3*total_accuracy*trust
- *      recent = last5_correct / 5           (делим всегда на 5 — штраф за мало данных)
- *      total_accuracy = correct / total     (0, если попыток не было)
- *      trust = min(1, total / 10)           (доверие к общей точности насыщается к 10 попыткам)
+ * Показатель выученности карточки, диапазон [0, 1]. Отражает «насколько
+ * хорошо вопрос знают» — без учёта времени, прошедшего с последнего ответа
+ * (для срочности повтора см. computeDecayedScore ниже). Именно это число
+ * показывается как % в списке статистики.
+ *
+ * Формула: score = 0.7*recent + 0.3*total_accuracy*trust
+ *   recent = last5_correct / <кол-во попыток в last5>  (не всегда /5 —
+ *            делим на фактическое число последних попыток, чтобы 1-2
+ *            ранних ответа не занижались искусственно)
+ *   total_accuracy = correct / total
+ *   trust = min(1, total / 8)   — доверие к общей точности насыщается к 8 попыткам
+ *
+ * Раньше здесь было отдельное правило «5 подряд верных -> score = 1»,
+ * которое давало резкий скачок ровно на 5-й попытке (а не плавный рост) и
+ * из-за экспоненты в computeWeight «выключало» вопрос из повторения
+ * практически мгновенно. Без него формула и так стремится к 1 естественным
+ * образом по мере накопления верных ответов.
  */
 function computeScore(rec) {
   if (!rec || rec.total === 0) return 0;
   const last5Correct = rec.last5.reduce((a, b) => a + b, 0);
-  if (rec.total >= 5 && rec.last5.length === 5 && last5Correct === 5) return 1;
-  const recent = last5Correct / 5;
-  const totalAccuracy = rec.total > 0 ? rec.correct / rec.total : 0;
-  const trust = Math.min(1, rec.total / 10);
+  const recent = last5Correct / rec.last5.length;
+  const totalAccuracy = rec.correct / rec.total;
+  const trust = Math.min(1, rec.total / 8);
   return 0.7 * recent + 0.3 * totalAccuracy * trust;
 }
 
 /**
+ * Score с поправкой на давность последнего ответа (кривая забывания) —
+ * используется только для приоритизации в режиме «Наиболее забываемые»,
+ * а не для показа % в статистике. Чем выше «сырой» score, тем дольше
+ * держится «период полураспада» — то есть хорошо выученные вопросы можно
+ * не повторять дольше, а слабо выученные забываются быстрее и возвращаются
+ * в очередь раньше. Без этой поправки вопрос, выученный давно и забытый с
+ * тех пор, никогда бы не всплывал в «Наиболее забываемых» снова.
+ */
+function computeDecayedScore(rec) {
+  const base = computeScore(rec);
+  if (!rec || !rec.last) return base; // ответов не было — распадаться нечему
+  const daysSince = (Date.now() - rec.last) / 86400000;
+  const halfLifeDays = 3 + 27 * base; // от ~3 дней (едва выучено) до ~30 дней (выучено твёрдо)
+  const decayFactor = Math.pow(0.5, daysSince / halfLifeDays);
+  return base * decayFactor;
+}
+
+/**
  * Вес карточки для вероятностной выборки в режиме «Наиболее забываемые».
- * weight = exp(-alpha * score) + beta, затем небольшой множитель для флажков.
+ * weight = exp(-alpha * decayedScore) + beta, затем множитель для флажков.
  */
 function computeWeight(qid) {
-  const score = computeScore(getRec(qid));
+  const score = computeDecayedScore(getRec(qid));
   let w = Math.exp(-SCORE_ALPHA * score) + SCORE_BETA;
   if (flags.has(qid)) w *= FLAG_WEIGHT_BOOST;
   return w;
