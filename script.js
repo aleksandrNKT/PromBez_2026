@@ -290,6 +290,13 @@ function pickQuestionIds(mode, count) {
     ordered = pool.slice().sort((a, b) => a.num - b.num);
   } else if (mode === 'random') {
     ordered = shuffle(pool);
+  } else if (mode === 'unanswered') {
+    // Только вопросы, на которые ещё не было ни одного ответа (total === 0 / записи нет).
+    const unanswered = pool.filter(q => {
+      const rec = getRec(q.id);
+      return !rec || rec.total === 0;
+    });
+    ordered = unanswered.slice().sort((a, b) => a.num - b.num);
   } else { // weak — вероятностная выборка с приоритетом карточек с низким score
     ordered = weightedOrder(pool, q => computeWeight(q.id));
   }
