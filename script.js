@@ -322,6 +322,30 @@ function startSession(mode) {
   renderQuestion();
 }
 
+/**
+ * Запускает мини-сессию из одного конкретного вопроса — по клику на строку
+ * в списке статистики. Статистика ответов (stats/flags) при этом никак не
+ * трогается: это отдельное хранилище (LS_KEYS.stats/flags), запуск сессии
+ * его не читает и не изменяет, пока пользователь не ответит на вопрос —
+ * а ответ и так должен попасть в статистику, как обычно.
+ */
+function startQuestionSession(qid) {
+  const q = ALL_QUESTIONS.find(x => x.id === qid);
+  if (!q) return;
+  session = {
+    mode: 'single',
+    examArea: selectedExamArea,
+    questionIds: [qid],
+    optionOrders: { [qid]: shuffle(q.options.map((_, i) => i)) },
+    index: 0,
+    answers: {},
+  };
+  saveJSON(LS_KEYS.session, session);
+  $('#stats-container').hidden = true;
+  showQuizScreen();
+  renderQuestion();
+}
+
 /* =========================================================================
    РЕНДЕР ВОПРОСА
    ========================================================================= */
@@ -393,10 +417,8 @@ function renderQuestion() {
     feedback.hidden = true;
   }
 
-  $('#check-btn').hidden = ans.checked;
-  $('#check-btn').disabled = ans.selected.length === 0;
   $('#prev-btn').disabled = session.index === 0;
-  $('#next-btn').disabled = session.index === session.questionIds.length - 1;
+  updateActionButton();
 
   $('#flag-btn').textContent = flags.has(q.id) ? '🚩 Убрать из повтора' : '🚩 Отметить для повтора';
 
@@ -413,7 +435,7 @@ function onOptionChange(q, origIdx, inputType) {
     if (i >= 0) ans.selected.splice(i, 1);
     else ans.selected.push(origIdx);
   }
-  $('#check-btn').disabled = ans.selected.length === 0;
+  updateActionButton();
   saveJSON(LS_KEYS.session, session);
 }
 
@@ -443,6 +465,48 @@ function goPrev() {
     session.index--;
     renderQuestion();
   }
+}
+
+/**
+ * Единая кнопка «Проверить / Следующий / Завершить» вместо трёх отдельных:
+ *  - вопрос ещё не отвечен -> «Проверить» (активна, когда выбран хотя бы один вариант)
+ *  - вопрос отвечен, есть следующий -> «Следующий ▶»
+ *  - вопрос отвечен, это последний в сессии -> «Завершить»
+ */
+function updateActionButton() {
+  const q = currentQuestion();
+  const ans = session.answers[q.id];
+  const btn = $('#action-btn');
+  const isLast = session.index === session.questionIds.length - 1;
+  if (!ans.checked) {
+    btn.textContent = 'Проверить';
+    btn.disabled = ans.selected.length === 0;
+  } else if (!isLast) {
+    btn.textContent = 'Следующий ▶';
+    btn.disabled = false;
+  } else {
+    btn.textContent = 'Завершить';
+    btn.disabled = false;
+  }
+}
+
+function onActionBtnClick() {
+  const q = currentQuestion();
+  const ans = session.answers[q.id];
+  if (!ans.checked) {
+    checkAnswer();
+  } else if (session.index < session.questionIds.length - 1) {
+    goNext();
+  } else {
+    finishSession();
+  }
+}
+
+/** Завершение сессии по кнопке «Завершить» — возврат на экран выбора режима. */
+function finishSession() {
+  session = null;
+  saveJSON(LS_KEYS.session, null);
+  showModeScreen();
 }
 
 function toggleFlag() {
@@ -535,7 +599,17 @@ function renderStats() {
 
   rows.forEach(({ q, rec, score }) => {
     const row = document.createElement('div');
-    row.className = 'stat-row';
+    row.className = 'stat-row stat-row-clickable';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.title = 'Нажмите, чтобы потренироваться именно на этом вопросе';
+    row.addEventListener('click', () => startQuestionSession(q.id));
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        startQuestionSession(q.id);
+      }
+    });
 
     const label = document.createElement('span');
     label.className = 'stat-row-label';
@@ -756,8 +830,7 @@ function bindEvents() {
     btn.addEventListener('click', () => startSession(btn.dataset.mode));
   });
 
-  $('#check-btn').addEventListener('click', checkAnswer);
-  $('#next-btn').addEventListener('click', goNext);
+  $('#action-btn').addEventListener('click', onActionBtnClick);
   $('#prev-btn').addEventListener('click', goPrev);
   $('#flag-btn').addEventListener('click', toggleFlag);
   $('#change-mode-btn').addEventListener('click', showModeScreen);
@@ -789,7 +862,7 @@ function bindEvents() {
     if ($('#quiz-container').hidden) return;
     if (e.key === 'ArrowRight') goNext();
     if (e.key === 'ArrowLeft') goPrev();
-    if (e.key === 'Enter') checkAnswer();
+    if (e.key === 'Enter') onActionBtnClick();
   });
 }
 
