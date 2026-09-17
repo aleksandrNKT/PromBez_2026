@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
+<meta name="description" content="Тренажёр для запоминания ответов на тест ПБ А.1 и Б9.4">
+<title>Тренажёр теста ПБ А.1 / Б9.4</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Верхняя панель: тема + статус синхронизации -->
+  <div id="top-bar">
+    <button id="theme-toggle-btn" class="icon-btn" title="Переключить тему" aria-label="Переключить тему">🌓</button>
+    <div id="sync-status" class="sync-status" data-state="offline">
+      <span id="sync-status-dot" class="sync-dot" aria-hidden="true"></span>
+      <span id="sync-status-text">Локально (это устройство)</span>
+    </div>
+    <button id="sync-btn" class="link-btn">🔗 Синхронизировать между устройствами</button>
+  </div>
+
+  <!-- Экран выбора области аттестации -->
+  <div id="area-selection" class="screen">
+    <h1>📘 Тренажёр по промышленной безопасности</h1>
+    <p class="hint centered">Выберите область аттестации, по которой хотите тренироваться</p>
+    <div id="area-buttons" class="mode-group" role="group" aria-label="Выбор области аттестации"></div>
+  </div>
+
+  <!-- Экран выбора режима -->
+  <div id="mode-selection" class="screen" hidden>
+    <div id="mode-screen-header">
+      <button id="change-area-btn" class="secondary-btn">◀ Другая область</button>
+      <span id="current-area-badge" class="badge"></span>
+    </div>
+
+    <div id="filters-block" class="card">
+      <h2>Разделы</h2>
+      <p class="hint">Оставьте все отмеченными, чтобы тренироваться по всей базе</p>
+      <div id="category-filters" class="chip-group" role="group" aria-label="Фильтр по нормативным документам"></div>
+    </div>
+
+    <div class="card">
+      <h2>Режим</h2>
+      <div id="mode-buttons" class="mode-group" role="group" aria-label="Выбор режима тренировки">
+        <button class="mode-btn" data-mode="order">📋 По порядку</button>
+        <button class="mode-btn" data-mode="random">🎲 Случайный</button>
+        <button class="mode-btn" data-mode="unanswered">🆕 Только неотвеченные</button>
+        <button class="mode-btn" data-mode="weak">🔁 Наиболее забываемые</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="question-count">Количество вопросов</label>
+      <select id="question-count">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+        <option value="all">Все выбранные</option>
+      </select>
+      <p id="total-questions-info">Доступно вопросов: <span id="total-count">0</span></p>
+    </div>
+
+    <div class="card">
+      <button id="stats-toggle-btn" class="secondary-btn">📊 Статистика ответов</button>
+      <div id="stats-container" class="stats-container" hidden>
+
+        <div class="stats-header">
+          <h3 id="stats-title">Статистика</h3>
+          <div class="btn-row no-margin">
+            <button id="stats-close-btn" class="secondary-btn">Закрыть</button>
+            <button id="reset-stats-btn" class="danger-btn">Сбросить статистику</button>
+          </div>
+        </div>
+
+        <div id="stats-summary" class="stats-summary"></div>
+
+        <div class="stats-controls">
+          <label for="stats-sort">Сортировка</label>
+          <select id="stats-sort">
+            <option value="weak_desc">Сначала самые сложные</option>
+            <option value="weak_asc">Сначала самые лёгкие</option>
+            <option value="unanswered">Сначала неотвеченные</option>
+            <option value="number">По номеру вопроса</option>
+            <option value="recent">Давно не повторяли</option>
+          </select>
+        </div>
+
+        <div id="stats-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Основной интерфейс викторины -->
+  <div id="quiz-container" class="screen" hidden>
+    <header>
+      <div id="progress-bar-track"><div id="progress-bar-fill"></div></div>
+      <div id="progress-text">Вопрос <span id="current">1</span> из <span id="total">0</span></div>
+    </header>
+
+    <main>
+      <div id="question-container">
+        <span id="question-category" class="badge"></span>
+        <div id="hint-multiple" class="hint" hidden>⚠️ Вопрос с несколькими правильными ответами — отметьте все подходящие варианты.</div>
+        <p id="question-text"></p>
+
+        <form id="options-form">
+          <div id="options-container" role="group"></div>
+        </form>
+
+        <div id="source-link-container">
+          <a id="source-link" href="#" target="_blank" rel="noopener" hidden>📎 Открыть источник вопроса</a>
+        </div>
+      </div>
+    </main>
+
+    <nav id="quiz-nav">
+      <button id="prev-btn">◀ Предыдущий</button>
+      <button id="action-btn" class="primary-btn">Проверить</button>
+    </nav>
+
+    <div id="feedback" hidden>
+      <p id="feedback-result"></p>
+      <p id="explanation"></p>
+    </div>
+
+    <div class="btn-row centered">
+      <button id="flag-btn" class="secondary-btn">🚩 Отметить для повтора</button>
+      <button id="master-btn" class="secondary-btn">✅ Отметить как выученное</button>
+      <button id="change-mode-btn" class="secondary-btn">🔄 Выбор режима</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
