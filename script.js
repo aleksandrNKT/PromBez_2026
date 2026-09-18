@@ -28,8 +28,10 @@ const FLAG_WEIGHT_BOOST = 1.5; // дополнительный множител�
 // это и имеется в виду под «выучено» в обиходном смысле.
 const MASTERY_THRESHOLD = 0.85;
 
-let ALL_QUESTIONS = [];      // всё из data.json (все области аттестации сразу)
-let EXAM_AREAS = [];         // уникальные области аттестации, напр. ["Б.9.4", "А.1"]
+let ALL_QUESTIONS = [];      // вопросы УЖЕ подгруженных областей (не всех сразу — см. ensureAreaLoaded)
+let EXAM_AREAS = [];         // уникальные области аттестации, напр. ["Б.9.4", "А.1"] — из манифеста data/index.json
+let AREA_INDEX = [];         // манифест: [{ examArea, file, count }, ...]
+let loadedAreas = new Set(); // examArea, чей файл вопросов уже скачан и замёржен в ALL_QUESTIONS
 let CATEGORIES = [];         // уникальные категории ВНУТРИ текущей выбранной области
 let stats = migrateAllStats(loadJSON(LS_KEYS.stats, {})); // { [id]: { total, correct, last5:[1,0,...], last } } — id глобально уникален, поэтому статистика областей не пересекается
 let flags = new Set(loadJSON(LS_KEYS.flags, []));
@@ -87,12 +89,34 @@ function $all(sel) { return Array.from(document.querySelectorAll(sel)); }
    ЗАГРУЗКА ДАННЫХ
    ========================================================================= */
 
-async function loadQuestions() {
-  const res = await fetch('data.json');
-  if (!res.ok) throw new Error('Не удалось загрузить data.json');
-  ALL_QUESTIONS = await res.json();
-  // Порядок областей — по первому появлению в файле (обычно соответствует порядку конвертации)
-  EXAM_AREAS = [...new Set(ALL_QUESTIONS.map(q => q.examArea).filter(Boolean))];
+/**
+ * Лёгкий манифест: список областей аттестации с именем файла и количеством
+ * вопросов, но БЕЗ самих вопросов. Грузится сразу при старте — на его основе
+ * рисуются кнопки выбора области (со счётчиком) ещё до того, как скачан
+ * хоть один вопрос.
+ */
+async function loadAreaIndex() {
+  const res = await fetch('data/index.json');
+  if (!res.ok) throw new Error('Не удалось загрузить data/index.json');
+  AREA_INDEX = await res.json();
+  EXAM_AREAS = AREA_INDEX.map(a => a.examArea);
+}
+
+/**
+ * Догружает вопросы конкретной области (её файл из манифеста), если они ещё
+ * не были загружены в этой сессии, и добавляет их в ALL_QUESTIONS. Повторный
+ * вызов для уже загруженной области — no-op. Вызывается перед любым
+ * обращением к вопросам области (выбор области, восстановление сессии).
+ */
+async function ensureAreaLoaded(area) {
+  if (loadedAreas.has(area)) return;
+  const entry = AREA_INDEX.find(a => a.examArea === area);
+  if (!entry) throw new Error(`Область «${area}» не найдена в манифесте data/index.json`);
+  const res = await fetch(entry.file);
+  if (!res.ok) throw new Error(`Не удалось загрузить ${entry.file}`);
+  const questions = await res.json();
+  ALL_QUESTIONS = ALL_QUESTIONS.concat(questions);
+  loadedAreas.add(area);
 }
 
 /** Вопросы только выбранной области аттестации (без учёта фильтра по категориям). */
@@ -750,8 +774,7 @@ function showQuizScreen() {
 function renderAreaButtons() {
   const box = $('#area-buttons');
   box.innerHTML = '';
-  EXAM_AREAS.forEach(area => {
-    const count = ALL_QUESTIONS.filter(q => q.examArea === area).length;
+  AREA_INDEX.forEach(({ examArea: area, count }) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mode-btn area-btn';
@@ -761,7 +784,18 @@ function renderAreaButtons() {
   });
 }
 
-function selectArea(area) {
+async function selectArea(area) {
+  const box = $('#area-buttons');
+  box.classList.add('is-loading');
+  try {
+    await ensureAreaLoaded(area);
+  } catch (err) {
+    box.classList.remove('is-loading');
+    console.error(err);
+    alert('Не удалось загрузить вопросы этой области. Проверьте подключение к интернету и попробуйте снова.');
+    return;
+  }
+  box.classList.remove('is-loading');
   selectedExamArea = area;
   saveJSON(LS_KEYS.examArea, area);
   refreshCategoriesForCurrentArea();
@@ -961,33 +995,46 @@ function bindEvents() {
 async function init() {
   applyTheme(loadJSON(LS_KEYS.theme, matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
-  await loadQuestions();
+  await loadAreaIndex();
   renderAreaButtons();
   $('#stats-sort').value = loadJSON(LS_KEYS.statsSort, 'weak_desc');
   bindEvents();
   initCloud();
 
-  // Восстановление сессии, прерванной перезагрузкой страницы (включая область аттестации)
-  if (session && session.questionIds && session.questionIds.length && session.examArea) {
-    const stillValid = session.questionIds.every(id => ALL_QUESTIONS.some(q => q.id === id));
-    if (stillValid && EXAM_AREAS.includes(session.examArea)) {
-      selectedExamArea = session.examArea;
-      saveJSON(LS_KEYS.examArea, selectedExamArea);
-      refreshCategoriesForCurrentArea();
-      renderCategoryFilters();
-      showQuizScreen();
-      renderQuestion();
-      if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-      return;
+  // Восстановление сессии, прерванной перезагрузкой страницы (включая область аттестации).
+  // Сначала нужно догрузить файл её области — без этого нечем проверить валидность questionIds.
+  if (session && session.questionIds && session.questionIds.length && session.examArea
+      && EXAM_AREAS.includes(session.examArea)) {
+    try {
+      await ensureAreaLoaded(session.examArea);
+      const stillValid = session.questionIds.every(id => ALL_QUESTIONS.some(q => q.id === id));
+      if (stillValid) {
+        selectedExamArea = session.examArea;
+        saveJSON(LS_KEYS.examArea, selectedExamArea);
+        refreshCategoriesForCurrentArea();
+        renderCategoryFilters();
+        showQuizScreen();
+        renderQuestion();
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+        return;
+      }
+    } catch (err) {
+      console.error(err); // офлайн на первом запуске и т.п. — просто падаем к экрану ниже
     }
   }
 
   // Если область уже выбиралась раньше — сразу открываем экран режима для неё,
   // иначе — экран выбора области (первый запуск).
   if (selectedExamArea && EXAM_AREAS.includes(selectedExamArea)) {
-    refreshCategoriesForCurrentArea();
-    renderCategoryFilters();
-    showModeScreen();
+    try {
+      await ensureAreaLoaded(selectedExamArea);
+      refreshCategoriesForCurrentArea();
+      renderCategoryFilters();
+      showModeScreen();
+    } catch (err) {
+      console.error(err);
+      showAreaScreen();
+    }
   } else {
     showAreaScreen();
   }

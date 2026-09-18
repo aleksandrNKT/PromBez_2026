@@ -1,0 +1,17 @@
+[
+  {
+    "examArea": "Б.9.4",
+    "file": "data/pb-b94.json",
+    "count": 235
+  },
+  {
+    "examArea": "А.1",
+    "file": "data/pb-a1.json",
+    "count": 211
+  },
+  {
+    "examArea": "ТЗ СПМ №106 (ББТ)",
+    "file": "data/tz-spm-106.json",
+    "count": 79
+  }
+]

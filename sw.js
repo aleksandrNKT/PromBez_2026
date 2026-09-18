@@ -1,11 +1,11 @@
-const CACHE_NAME = 'pb-trainer-v3';
+const CACHE_NAME = 'pb-trainer-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
   './style.css',
   './script.js',
   './firebase-config.js',
-  './data.json',
+  './data/index.json',
   './manifest.json',
 ];
 
