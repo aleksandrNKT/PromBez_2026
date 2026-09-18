@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pb-trainer-v2';
+const CACHE_NAME = 'pb-trainer-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -33,7 +33,7 @@ self.addEventListener('fetch', event => {
   if (event.request.url.includes('googleapis.com') || event.request.url.includes('firebase')) return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then(res => {
         const clone = res.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
